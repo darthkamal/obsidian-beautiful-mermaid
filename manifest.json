@@ -1,0 +1,10 @@
+{
+  "id": "beautiful-mermaid",
+  "name": "Beautiful Mermaid",
+  "version": "1.0.7",
+  "minAppVersion": "1.4.0",
+  "description": "Renders Mermaid diagrams using beautiful-mermaid for stunning, themed SVG output that automatically follows your vault theme.",
+  "author": "darthkamal",
+  "authorUrl": "https://github.com/darthkamal/obsidian-beautiful-mermaid",
+  "isDesktopOnly": false
+}
