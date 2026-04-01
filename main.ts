@@ -253,10 +253,8 @@ export default class BeautifulMermaidPlugin extends Plugin {
     excBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const ok = await this.exportToExcalidraw(source, svgString);
-      if (!ok) {
-        excBtn.textContent = '✗';
-        setTimeout(() => { excBtn.textContent = 'Excalidraw'; }, 1500);
-      }
+      excBtn.textContent = ok ? '✓' : '✗';
+      setTimeout(() => { excBtn.textContent = 'Excalidraw'; }, 1500);
     });
   }
 
@@ -317,7 +315,7 @@ export default class BeautifulMermaidPlugin extends Plugin {
       // parseMermaidToExcalidraw handles flowchart, sequence, class, ER, and state diagrams,
       // falling back to a GraphImage (SVG embed) for unsupported types.
       const { elements: skeletons, files } = await parseMermaidToExcalidraw(source);
-      const elements = this.hydrateSkeletons(skeletons);
+      const elements = this.fixBindings(this.hydrateSkeletons(skeletons));
 
       // files is populated only for GraphImage fallback (unsupported diagram types).
       // For those, resolve auto-mode CSS vars so the embedded SVG has literal colors.
@@ -327,7 +325,16 @@ export default class BeautifulMermaidPlugin extends Plugin {
           excalidrawFiles[id] = {
             ...file,
             dataURL: (file as any).mimeType === 'image/svg+xml'
-              ? 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(this.resolveAutoColors(atob((file as any).dataURL.split(',')[1])))))
+              ? (() => {
+                  // Decode base64 → Uint8Array → UTF-8 string (safe for multi-byte chars),
+                  // resolve CSS vars, then re-encode back to base64.
+                  const b64 = (file as any).dataURL.split(',')[1];
+                  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+                  const svgText = new TextDecoder().decode(bytes);
+                  const resolved = this.resolveAutoColors(svgText);
+                  const reencoded = btoa(new TextEncoder().encode(resolved).reduce((s, b) => s + String.fromCharCode(b), ''));
+                  return 'data:image/svg+xml;base64,' + reencoded;
+                })()
               : (file as any).dataURL,
           };
         }
@@ -336,7 +343,7 @@ export default class BeautifulMermaidPlugin extends Plugin {
       const excalidraw = {
         type: 'excalidraw',
         version: 2,
-        source: 'beautiful-mermaid',
+        source: 'https://excalidraw.com',
         elements,
         appState: { gridSize: null, viewBackgroundColor: '#ffffff' },
         files: excalidrawFiles,
@@ -446,8 +453,8 @@ export default class BeautifulMermaidPlugin extends Plugin {
           id,
           x: sk.x ?? 0,
           y: sk.y ?? 0,
-          width: Math.abs(endPt[0]),
-          height: Math.abs(endPt[1]),
+          width: sk.width != null ? Math.abs(sk.width) : Math.abs(endPt[0]),
+          height: sk.height != null ? Math.abs(sk.height) : Math.abs(endPt[1]),
           points: pts,
           lastCommittedPoint: null,
           startArrowhead: sk.startArrowhead ?? null,
@@ -529,6 +536,29 @@ export default class BeautifulMermaidPlugin extends Plugin {
     }
 
     return out;
+  }
+
+  /**
+   * Ensures every arrow's startBinding/endBinding target has a reciprocal
+   * entry in its boundElements array. The mermaid-to-excalidraw converter
+   * sets binding references on arrows but does not register them on the
+   * target shapes — without this, arrows detach the first time a shape moves.
+   */
+  private fixBindings(elements: any[]): any[] {
+    const byId = new Map<string, any>(elements.map(e => [e.id, e]));
+    for (const el of elements) {
+      if (el.type !== 'arrow' && el.type !== 'line') continue;
+      for (const binding of [el.startBinding, el.endBinding]) {
+        if (!binding?.elementId) continue;
+        const target = byId.get(binding.elementId);
+        if (!target) continue;
+        if (!Array.isArray(target.boundElements)) target.boundElements = [];
+        if (!target.boundElements.some((b: any) => b.id === el.id)) {
+          target.boundElements.push({ type: 'arrow', id: el.id });
+        }
+      }
+    }
+    return elements;
   }
 
   /**

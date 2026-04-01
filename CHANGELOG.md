@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.8 — 2026-04-02
+
+- **Fix:** Excalidraw export `source` field corrected to `https://excalidraw.com` (was `"beautiful-mermaid"`, which caused the Obsidian plugin to reject the file)
+- **Fix:** Arrow bindings now registered on both source and target shapes via `fixBindings` post-pass — arrows no longer detach when shapes are moved
+- **Fix:** Arrow `width`/`height` now uses skeleton-provided dimensions when available, falling back to point offsets — fixes curved and multi-segment arrow geometry
+- **Fix:** SVG base64 re-encoding uses `TextDecoder`/`TextEncoder` for safe Unicode round-trips — prevents corruption of multi-byte characters in embedded SVGs
+- **Fix:** Excalidraw button now shows `✓` on success and `✗` on failure (previously only showed `✗` on failure)
+
 ## 1.0.7 — 2026-04-01
 
 - **Fix:** Corrected `manifest.json` author metadata (`darthkamal`) and `authorUrl` for community plugin submission
