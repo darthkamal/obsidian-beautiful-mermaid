@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.10 — 2026-04-02
+
+- **Fix:** Beautiful Mermaid now renders in Live Preview mode. Obsidian's CM6 extension intercepts mermaid code blocks before `registerMarkdownCodeBlockProcessor` runs, so a `MutationObserver` now watches for `.cm-lang-mermaid` embed blocks, extracts the source via `posAtDOM`, and replaces the default SVG with our renderer. Both Reading Mode and Live Preview now use beautiful-mermaid consistently.
+
 ## 1.0.9 — 2026-04-02
 
 - **Fix:** Live Preview now works without a custom CM6 extension — `registerMarkdownCodeBlockProcessor` handles both Reading Mode and Live Preview natively in Obsidian 1.4+. The previous CM6 `ViewPlugin` with `block: true` decorations was forbidden by Obsidian's CM6 fork, causing a "failed to open the file" crash. The custom extension has been removed entirely.

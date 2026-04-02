@@ -64,11 +64,70 @@ export default class BeautifulMermaidPlugin extends Plugin {
       this.renderDiagram(source, el);
     });
 
-    // Live Preview is handled natively by registerMarkdownCodeBlockProcessor above.
-    // A custom CM6 ViewPlugin is not needed — Obsidian routes live-preview code
-    // blocks through the same processor as Reading Mode.
+    // Live Preview: Obsidian's CM6 extension renders mermaid blocks into
+    // .cm-lang-mermaid embed blocks before our processor runs. We intercept
+    // them with a MutationObserver and replace the default SVG with ours.
+    this.registerEvent(
+      this.app.workspace.on('layout-change', () => this.attachLivePreviewObserver()),
+    );
+    this.attachLivePreviewObserver();
 
     this.addSettingTab(new BeautifulMermaidSettingTab(this.app, this));
+  }
+
+  private livePreviewObservers = new Map<Element, MutationObserver>();
+
+  private attachLivePreviewObserver(): void {
+    // Attach a MutationObserver to every active CM6 editor's .cm-content node.
+    // When Obsidian inserts a .cm-lang-mermaid embed block we replace the
+    // default SVG with our own renderer.
+    this.app.workspace.iterateAllLeaves((leaf) => {
+      const view = leaf.view as any;
+      const cm = view?.editor?.cm;
+      if (!cm) return;
+
+      const content: Element | null = cm.dom?.querySelector?.('.cm-content');
+      if (!content || this.livePreviewObservers.has(content)) return;
+
+      const observer = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+          for (const node of Array.from(m.addedNodes)) {
+            if (!(node instanceof HTMLElement)) continue;
+            if (node.classList.contains('cm-lang-mermaid')) {
+              this.replaceLivePreviewBlock(node, cm);
+            }
+            node.querySelectorAll?.('.cm-lang-mermaid').forEach((el) => {
+              this.replaceLivePreviewBlock(el as HTMLElement, cm);
+            });
+          }
+        }
+      });
+
+      observer.observe(content, { childList: true, subtree: true });
+      this.livePreviewObservers.set(content, observer);
+
+      // Replace any .cm-lang-mermaid blocks already in the DOM on attach.
+      content.querySelectorAll('.cm-lang-mermaid').forEach((el) => {
+        this.replaceLivePreviewBlock(el as HTMLElement, cm);
+      });
+    });
+  }
+
+  private replaceLivePreviewBlock(el: HTMLElement, cm: any): void {
+    if (el.dataset.bmRendered) return;
+    el.dataset.bmRendered = '1';
+
+    try {
+      const pos: number = cm.posAtDOM(el);
+      const text: string = cm.state.doc.sliceString(pos, Math.min(pos + 4096, cm.state.doc.length));
+      const match = text.match(/^```mermaid\n([\s\S]*?)\n```/);
+      if (!match) return;
+
+      el.empty();
+      this.renderDiagram(match[1], el);
+    } catch (e) {
+      console.error('[Beautiful Mermaid] Live preview replace error:', e);
+    }
   }
 
   renderDiagram(source: string, el: HTMLElement): void {
@@ -601,8 +660,8 @@ export default class BeautifulMermaidPlugin extends Plugin {
   }
 
   onunload(): void {
-    // Obsidian automatically unregisters code block processors on plugin unload.
-    // Pointer event listeners are scoped to diagram elements — no cleanup needed.
+    this.livePreviewObservers.forEach((obs) => obs.disconnect());
+    this.livePreviewObservers.clear();
   }
 
   async loadSettings(): Promise<void> {
