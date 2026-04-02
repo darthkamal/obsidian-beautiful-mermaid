@@ -64,11 +64,9 @@ export default class BeautifulMermaidPlugin extends Plugin {
       this.renderDiagram(source, el);
     });
 
-    // Live Preview — disabled in 1.0.6 (causes "failed to open the file" crash in CM6).
-    // The ViewPlugin with block:true decorations triggers an uncaught error inside
-    // CM6's internal decoration resolution that Obsidian surfaces as a file-open
-    // failure. Re-enable once root cause is identified.
-    // this.registerEditorExtension(mermaidLivePreview(this));
+    // Live Preview is handled natively by registerMarkdownCodeBlockProcessor above.
+    // A custom CM6 ViewPlugin is not needed — Obsidian routes live-preview code
+    // blocks through the same processor as Reading Mode.
 
     this.addSettingTab(new BeautifulMermaidSettingTab(this.app, this));
   }
@@ -681,7 +679,6 @@ function buildDecorations(view: EditorView, plugin: BeautifulMermaidPlugin): Dec
             inner.to,
             Decoration.replace({
               widget: new MermaidWidget(sourceLines.join('\n'), plugin),
-              block: true,
             }),
           );
           lineNum++;

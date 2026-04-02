@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.9 — 2026-04-02
+
+- **Fix:** Live Preview now works without a custom CM6 extension — `registerMarkdownCodeBlockProcessor` handles both Reading Mode and Live Preview natively in Obsidian 1.4+. The previous CM6 `ViewPlugin` with `block: true` decorations was forbidden by Obsidian's CM6 fork, causing a "failed to open the file" crash. The custom extension has been removed entirely.
+
 ## 1.0.8 — 2026-04-02
 
 - **Fix:** Excalidraw export `source` field corrected to `https://excalidraw.com` (was `"beautiful-mermaid"`, which caused the Obsidian plugin to reject the file)
