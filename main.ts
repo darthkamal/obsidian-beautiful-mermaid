@@ -406,13 +406,23 @@ export default class BeautifulMermaidPlugin extends Plugin {
         files: excalidrawFiles,
       };
 
-      let path = 'mermaid-diagram.excalidraw';
+      // Extract text elements for the Text Elements index section.
+      const textLines = elements
+        .filter((el: any) => el.type === 'text' && el.text)
+        .map((el: any) => `${el.text} ^${el.id}`)
+        .join('\n');
+
+      // Use .excalidraw.md format (the native Obsidian Excalidraw plugin format).
+      // Raw .excalidraw JSON files open in "compatibility mode" in newer plugin versions.
+      const fileContent = `---\n\nexcalidraw-plugin: parsed\ntags: [excalidraw]\n\n---\n==⚠  Switch to EXCALIDRAW VIEW in the MORE OPTIONS menu of this document. ⚠==\n\n\n# Excalidraw Data\n\n## Text Elements\n${textLines}\n\n%%\n## Drawing\n\`\`\`json\n${JSON.stringify(excalidraw)}\n\`\`\`\n%%`;
+
+      let path = 'mermaid-diagram.excalidraw.md';
       let i = 1;
       while (this.app.vault.getAbstractFileByPath(path)) {
-        path = `mermaid-diagram-${i++}.excalidraw`;
+        path = `mermaid-diagram-${i++}.excalidraw.md`;
       }
 
-      await this.app.vault.create(path, JSON.stringify(excalidraw, null, 2));
+      await this.app.vault.create(path, fileContent);
       await this.app.workspace.openLinkText(path, '', true);
       return true;
     } catch (err) {

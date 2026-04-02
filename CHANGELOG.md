@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.11 — 2026-04-02
+
+- **Fix:** Excalidraw export now generates `.excalidraw.md` (the native Obsidian Excalidraw plugin format) instead of raw `.excalidraw` JSON. Raw files were opening in "compatibility mode" in Excalidraw plugin v2.x. The new format wraps the JSON in proper YAML frontmatter with `excalidraw-plugin: parsed`, a `## Text Elements` index, and a `json` code block between `%%` delimiters — opening directly in Excalidraw drawing view with no warnings.
+
 ## 1.0.10 — 2026-04-02
 
 - **Fix:** Beautiful Mermaid now renders in Live Preview mode. Obsidian's CM6 extension intercepts mermaid code blocks before `registerMarkdownCodeBlockProcessor` runs, so a `MutationObserver` now watches for `.cm-lang-mermaid` embed blocks, extracts the source via `posAtDOM`, and replaces the default SVG with our renderer. Both Reading Mode and Live Preview now use beautiful-mermaid consistently.

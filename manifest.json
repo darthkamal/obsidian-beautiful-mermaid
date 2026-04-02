@@ -1,7 +1,7 @@
 {
   "id": "beautiful-mermaid",
   "name": "Beautiful Mermaid",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "minAppVersion": "1.4.0",
   "description": "Renders Mermaid diagrams using beautiful-mermaid for stunning, themed SVG output that automatically follows your vault theme.",
   "author": "darthkamal",
