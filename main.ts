@@ -2,9 +2,6 @@ import { App, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import { renderMermaidSVG, THEMES } from 'beautiful-mermaid';
 import type { RenderOptions, DiagramColors } from 'beautiful-mermaid';
 import { parseMermaidToExcalidraw } from '@excalidraw/mermaid-to-excalidraw';
-import { ViewPlugin, Decoration, WidgetType, EditorView } from '@codemirror/view';
-import type { DecorationSet, ViewUpdate } from '@codemirror/view';
-import { RangeSetBuilder } from '@codemirror/state';
 
 // ============================================================
 // Types & Constants
@@ -68,7 +65,10 @@ export default class BeautifulMermaidPlugin extends Plugin {
     // .cm-lang-mermaid embed blocks before our processor runs. We intercept
     // them with a MutationObserver and replace the default SVG with ours.
     this.registerEvent(
-      this.app.workspace.on('layout-change', () => this.attachLivePreviewObserver()),
+      this.app.workspace.on('layout-change', () => {
+        this.pruneLivePreviewObservers();
+        this.attachLivePreviewObserver();
+      }),
     );
     this.attachLivePreviewObserver();
 
@@ -76,6 +76,18 @@ export default class BeautifulMermaidPlugin extends Plugin {
   }
 
   private livePreviewObservers = new Map<Element, MutationObserver>();
+
+  private pruneLivePreviewObservers(): void {
+    // Remove observers whose .cm-content element is no longer in the DOM
+    // (happens when a leaf is closed). A MutationObserver on a detached node
+    // never fires, but keeping the reference prevents GC.
+    for (const [content, obs] of this.livePreviewObservers) {
+      if (!content.isConnected) {
+        obs.disconnect();
+        this.livePreviewObservers.delete(content);
+      }
+    }
+  }
 
   private attachLivePreviewObserver(): void {
     // Attach a MutationObserver to every active CM6 editor's .cm-content node.
@@ -409,7 +421,7 @@ export default class BeautifulMermaidPlugin extends Plugin {
       // Extract text elements for the Text Elements index section.
       const textLines = elements
         .filter((el: any) => el.type === 'text' && el.text)
-        .map((el: any) => `${el.text} ^${el.id}`)
+        .map((el: any) => `${el.text.replace(/\n/g, ' ')} ^${el.id}`)
         .join('\n');
 
       // Use .excalidraw.md format (the native Obsidian Excalidraw plugin format).
@@ -640,8 +652,10 @@ export default class BeautifulMermaidPlugin extends Plugin {
     const sub = (v: string) => {
       const val = style.getPropertyValue(v).trim();
       if (!val) return;
-      // Match var(--foo), var( --foo ), var(--foo, fallback) — all valid CSS forms
-      const re = new RegExp('var\\(\\s*' + v.replace(/-/g, '\\-') + '[^)]*\\)', 'g');
+      // Match var(--foo), var( --foo ), var(--foo, fallback) — all valid CSS forms.
+      // The lookahead (?=[\s,)]) prevents matching longer variables that share
+      // a prefix (e.g. --background-primary must not match --background-primary-alt).
+      const re = new RegExp('var\\(\\s*' + v.replace(/-/g, '\\-') + '(?=[\\s,)][^)]*\\))[^)]*\\)', 'g');
       s = s.replace(re, val);
     };
     sub('--background-primary');
@@ -681,116 +695,6 @@ export default class BeautifulMermaidPlugin extends Plugin {
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
   }
-}
-
-// ============================================================
-// Live Preview — CodeMirror 6 extension
-// ============================================================
-
-class MermaidWidget extends WidgetType {
-  constructor(
-    private readonly source: string,
-    private readonly plugin: BeautifulMermaidPlugin,
-  ) { super(); }
-
-  eq(other: MermaidWidget): boolean {
-    return other.source === this.source;
-  }
-
-  toDOM(): HTMLElement {
-    const wrap = document.createElement('div');
-    try {
-      this.plugin.renderDiagram(this.source, wrap);
-    } catch (e) {
-      console.error('[Beautiful Mermaid] Widget toDOM error:', e);
-      wrap.textContent = '⚠ Beautiful Mermaid: render error (see console)';
-    }
-    return wrap;
-  }
-
-  // Toolbar button clicks are handled by the widget; clicks on the diagram
-  // body pass through to the editor so the cursor moves inside and reveals
-  // the raw source for editing.
-  ignoreEvent(event: Event): boolean {
-    if (!(event instanceof MouseEvent)) return false;
-    return (event.target as HTMLElement).closest('.beautiful-mermaid-toolbar') !== null;
-  }
-}
-
-// Scans document text directly — avoids any dependency on syntaxTree availability.
-function buildDecorations(view: EditorView, plugin: BeautifulMermaidPlugin): DecorationSet {
-  const builder = new RangeSetBuilder<Decoration>();
-  const { state } = view;
-  const doc = state.doc;
-  const cursorPos = state.selection.main.head;
-
-  let lineNum = 1;
-  while (lineNum <= doc.lines) {
-    const line = doc.line(lineNum);
-
-    // Detect opening fence: ``` or ~~~ followed by 'mermaid'
-    if (/^(`{3,}|~{3,})\s*mermaid\s*$/i.test(line.text.trim())) {
-      const fence = line.text.trim().startsWith('~') ? '~~~' : '```';
-      const blockFrom = line.from;
-      const sourceLines: string[] = [];
-      lineNum++;
-
-      while (lineNum <= doc.lines) {
-        const inner = doc.line(lineNum);
-        if (inner.text.trim() === fence) {
-          // Cursor inside → show raw text for editing
-          if (cursorPos >= blockFrom && cursorPos <= inner.to) {
-            lineNum++;
-            break;
-          }
-          builder.add(
-            blockFrom,
-            inner.to,
-            Decoration.replace({
-              widget: new MermaidWidget(sourceLines.join('\n'), plugin),
-            }),
-          );
-          lineNum++;
-          break;
-        }
-        sourceLines.push(inner.text);
-        lineNum++;
-      }
-    } else {
-      lineNum++;
-    }
-  }
-
-  return builder.finish();
-}
-
-function mermaidLivePreview(plugin: BeautifulMermaidPlugin) {
-  const empty = () => new RangeSetBuilder<Decoration>().finish();
-  return ViewPlugin.fromClass(
-    class {
-      decorations: DecorationSet;
-
-      constructor(view: EditorView) {
-        try {
-          this.decorations = buildDecorations(view, plugin);
-        } catch (e) {
-          console.error('[Beautiful Mermaid] Live preview init error:', e);
-          this.decorations = empty();
-        }
-      }
-
-      update(update: ViewUpdate) {
-        if (update.docChanged || update.viewportChanged || update.selectionSet) {
-          try {
-            this.decorations = buildDecorations(update.view, plugin);
-          } catch (e) {
-            console.error('[Beautiful Mermaid] Live preview update error:', e);
-          }
-        }
-      }
-    },
-    { decorations: (v) => v.decorations },
-  );
 }
 
 // ============================================================

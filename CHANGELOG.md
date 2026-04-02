@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.12 — 2026-04-02
+
+- **Fix:** `resolveAutoColors` regex now requires a word boundary after the CSS variable name — prevents `--background-primary` from matching `--background-primary-alt` or other prefixed variants, which would produce wrong colors silently
+- **Fix:** `livePreviewObservers` Map no longer accumulates stale entries — a `pruneLivePreviewObservers()` pass on every `layout-change` event disconnects and removes observers whose `.cm-content` element is no longer connected to the DOM
+- **Fix:** Multi-line text in Excalidraw text element index — newlines in element text are collapsed to spaces so block references land on the correct line
+- **Cleanup:** Removed dead CM6 `MermaidWidget`, `buildDecorations`, and `mermaidLivePreview` code along with the three unused `@codemirror/view` and `@codemirror/state` imports
+
 ## 1.0.11 — 2026-04-02
 
 - **Fix:** Excalidraw export now generates `.excalidraw.md` (the native Obsidian Excalidraw plugin format) instead of raw `.excalidraw` JSON. Raw files were opening in "compatibility mode" in Excalidraw plugin v2.x. The new format wraps the JSON in proper YAML frontmatter with `excalidraw-plugin: parsed`, a `## Text Elements` index, and a `json` code block between `%%` delimiters — opening directly in Excalidraw drawing view with no warnings.
